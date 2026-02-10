@@ -1,0 +1,41 @@
+name: Update Fake Filter
+
+on:
+  schedule:
+    - cron: '23 14 * * 0' # 錯峰執行
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+
+      - name: Fast Convert (AWK)
+        run: |
+          # 執行極速轉換
+          curl -sL https://raw.githubusercontent.com/felixonmars/dnsmasq-china-list/master/accelerated-domains.china.conf | \
+          awk -F'/' 'BEGIN {print "payload:"} /^server=\// {printf "  - \x27+.%s\x27\n", $2}' > fake-filter.yaml
+
+      - name: Deploy to Release Branch
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+          # 暫存生成的文件
+          mv fake-filter.yaml /tmp/fake-filter.yaml
+
+          # 切換到一個全新的、無歷史的孤兒分支 (Orphan Branch)
+          git checkout --orphan release
+
+          # 刪除當前分支所有從 main 帶過來的內容
+          git rm -rf .
+
+          # 把文件拿回來並提交
+          mv /tmp/fake-filter.yaml fake-filter.yaml
+          git add fake-filter.yaml
+          git commit -m "Release data $(date +%F)"
+
+          # 強制推送到遠端的 release 分支
+          git push origin release --force
